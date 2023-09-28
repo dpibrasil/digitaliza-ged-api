@@ -1,11 +1,25 @@
-// import type { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
+import type { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import Directory from 'App/Models/Directory'
 import DirectoryIndexListValue from 'App/Models/DirectoryIndexListValue'
 import Document from 'App/Models/Document'
 import DocumentIndex from 'App/Models/DocumentIndex'
+import createDirectoryIndexesSchema from 'App/Util/directory-validator'
 
 export default class DocumentIndexesController {
+
+    async validate({ request }: HttpContextContract)
+    {
+        const directoryId = request.input('directoryId')
+        const directory = await Directory.query()
+            .where('id', directoryId)
+            .preload('indexes')
+            .firstOrFail()
+
+        const schema = await createDirectoryIndexesSchema(directory)
+
+        await request.validate({ schema })
+    }
 
     async update({request}) {
         const documentId = request.param('documentId')

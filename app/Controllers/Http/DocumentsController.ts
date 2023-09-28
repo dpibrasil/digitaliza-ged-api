@@ -4,18 +4,17 @@ import Directory from "App/Models/Directory"
 import Document from "App/Models/Document"
 import Organization from "App/Models/Organization"
 import Storage from "App/Models/Storage"
-import { v4 as uuid } from 'uuid';
-import { schema, rules } from '@ioc:Adonis/Core/Validator'
+import Env from '@ioc:Adonis/Core/Env'
 import DocumentIndex from "App/Models/DocumentIndex";
 import CreateDocumentValidator from "App/Validators/CreateDocumentValidator";
 import fs from 'fs';
 import DirectoryIndex from "App/Models/DirectoryIndex";
-import encrypt from 'node-file-encrypt';
 import DocumentVersion from "App/Models/DocumentVersion";
 import AdmZip from 'adm-zip';
 import { Readable } from 'stream';
 import DirectoryIndexListValue from "App/Models/DirectoryIndexListValue";
-import Pdf from "App/Models/Pdf";
+import createDirectoryIndexesSchema from 'App/Util/directory-validator'
+import createEncryptedFile from 'App/Util/encrypted-file'
 export default class DocumentsController {
 
     async show({request}) {
@@ -157,65 +156,42 @@ export default class DocumentsController {
         const storage = await Storage.findOrFail(organization.storageId)
 
         // validate indexes
-        const s = schema.create(Object.fromEntries(directory.indexes.map(index => {
-            const schemaType = {
-                datetime: 'date',
-                list: 'number'
-            }[index.type] ?? index.type
-            
-            const args: any = []
-
-            args.push([])
-            if (index.minLength) args[0].push(rules.minLength(index.minLength))
-            if (index.maxLength) args[0].push(rules.maxLength(index.maxLength))
-            if (index.min || index.max) args[0].push(rules.range(index.min, index.max))
-            if (index.regex) args[0].push(rules.regex(new RegExp(index.regex)))
-            if (index.type == 'list') args[0].push(rules.exists({table: 'directory_index_list_values', column: 'id'}))
-            if (schemaType == 'string') args.unshift({})
-
-            return ['index-' + index.id, index.notNullable ? schema[schemaType](...args) : schema[schemaType].optional(...args)]
-        })))
-        const documentIndexesValues = await request.validate({ schema: s })
+        const directorySchema = createDirectoryIndexesSchema(directory)
+        const documentIndexesValues = await request.validate({ schema: directorySchema })
 
         // define properties
         const data: any = request.only(['directoryId', 'mantainerId', 'documentId'])
         data.organizationId = organization.id
         data.editorId = auth.user?.id
         data.version = 1
-        data.secretKey = uuid()
+        data.secretKey = Env.get('DOCUMENTS_KEY')
     
         // create path
         const now = new Date()
         const documentPath = `${now.getFullYear()}/${data.organizationId}/${('00' + Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (60*60*24*1000))).slice(-3)}/${data.documentId}`
-        fs.mkdirSync(`${storage.path}/${documentPath}`, {recursive: true})
+        fs.mkdirSync(`${storage.path}/${documentPath}`, { recursive: true })
 
         // define file path
-        var fileTmpPath;
         const file = request.file('file')
-        const pdfId = request.input('pdfId')
-        if (!file && !pdfId) {
+        if (!file) {
             return response.badRequest({message: 'Você deve enviar um arquivo.'})
         }
 
-        if (pdfId) {
-            const pdf = await Pdf.findOrFail(pdfId)
-            fileTmpPath = pdf.outputPath
-        } else {
-            fileTmpPath = file.tmpPath
-        }
-
         // encrypt and save file
-        const encryptedFile = new encrypt.FileEncrypt(fileTmpPath, `${storage.path}/${documentPath}`, '.ged.tmp', false)
-        encryptedFile.openSourceFile()
-        await encryptedFile.encryptAsync(data.secretKey)
-        fs.renameSync(encryptedFile.encryptFilePath, `${storage.path}/${documentPath}/${data.documentId}-v${data.version}.ged`)
+        await createEncryptedFile(
+            file,
+            { path: documentPath, version: data.version, documentId: data.documentId },
+            storage,
+            data.secretKey
+        )
 
         await DocumentVersion.create({
             documentId: data.documentId,
             version: data.version,
             storageId: storage.id,
             editorId: auth.user?.id,
-            path: documentPath
+            path: documentPath,
+            s3Synced: false
         })
 
         // create document

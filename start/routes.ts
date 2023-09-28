@@ -14,6 +14,7 @@ Route.group(() => {
     Route.post('/documents/:id/duplicate', 'DocumentsController.duplicate')
     Route.resource('/documents/:documentId/versions', 'DocumentVersionsController')
     Route.put('/documents/:documentId/indexes', 'DocumentIndexesController.update')
+    Route.post('/documents-indexes/validate', 'DocumentIndexesController.validate')
     Route.post('/documents/export-list', 'DocumentsController.exportList')
 
     Route.post('/pdfs', 'PdfsController.init')
