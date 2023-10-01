@@ -7,7 +7,7 @@ export default {
     models: ['User', 'Document', 'Directory', 'Organization', 'DirectoryIndex'],
 
     // Define the paths that must be included in backups
-    paths: [Application.tmpPath('uploads')],
+    paths: [],
 
     // Define if the backup should be encrypted
     // IMPORTANT: You can only restore the backup if you have the key

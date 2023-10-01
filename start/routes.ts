@@ -2,6 +2,9 @@ import Route from '@ioc:Adonis/Core/Route'
 
 Route.post('/auth/login', 'AuthController.login')
 Route.get('/test-connection', () => ({message: 'OK'}))
+Route.resource('/backups', 'BackupsController').only(['store', 'index', 'destroy'])
+Route.get('/backups/organization/:organizationId', 'BackupsController.showByOrganization')
+Route.get('/backups/:id', 'BackupsController.downloadBackup')
 
 Route.group(() => {
     Route.resource('/organizations', 'OrganizationsController')

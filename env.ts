@@ -39,5 +39,6 @@ export default Env.rules({
     AWS_SYNC: Env.schema.boolean(),
     STORAGES_PATH: Env.schema.string(),
     DOCUMENTS_KEY: Env.schema.string(),
-    UPLOADS_PATH: Env.schema.string()
+    UPLOADS_PATH: Env.schema.string(),
+    BACKUPS_PATH: Env.schema.string(),
 })
