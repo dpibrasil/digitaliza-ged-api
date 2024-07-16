@@ -241,7 +241,7 @@ export default class DocumentsController {
             var path = [...indexesIDs.map(id => {
                 const index: any = indexes.find(i => i.id == id)
                 // @ts-ignore
-                return documentIndexes.find(i => i.indexId == index.id)[index.type].toLocaleString().replace('/', '-').replace('\\', '-')
+                return documentIndexes.find(i => i.indexId == index.id)[index.type].toLocaleString().replace(/\//, '-').replace(/\\/, '-')
             }), document.id]
 
             zip.addFile(path.join('-') + '.pdf', fs.readFileSync(d.path))
