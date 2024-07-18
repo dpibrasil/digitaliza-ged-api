@@ -32,5 +32,6 @@ Route.group(() => {
         Route.resource('/mantainers', 'MantainersController')
         Route.get('/organizations/:id/report', 'DocumentReportsController.index')
         Route.get('/path', 'PathsController.index')
+        Route.get('/documents/:id/project', 'DocumentsController.downloadProject')
     }).middleware('isAdmin')
 }).middleware('auth')

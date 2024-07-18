@@ -213,6 +213,19 @@ export default class DocumentsController {
         return document.serialize()
     }
 
+    async downloadProject({ request, response, auth, logger }) {
+        const documentId = request.param('id')
+        const document = await Document.findOrFail(documentId)
+        const uploadsPath = Env.get('UPLOADS_PATH')
+
+        const projectPath = uploadsPath + '/' + document.documentId + '.ged-project'
+
+        response.header('Content-Type', 'application/pdf')
+
+        response.download(projectPath, true)
+        logger.info(`User ${auth.user.id} download GED Project from document ${document.id}.`)
+    }
+
     async download({request, response, auth, logger}) {
         const documentId = request.param('id')
         const document = await Document.findOrFail(documentId)
