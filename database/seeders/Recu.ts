@@ -28,7 +28,6 @@ export default class extends BaseSeeder {
 
           fs.writeFile(tempPath, pdf)
 
-          // await fs.writeFile(tempPath, pdf)
           const encryptedFile = new encrypt.FileEncrypt(
             tempPath,
             gedProjectDir,
