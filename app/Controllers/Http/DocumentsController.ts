@@ -25,7 +25,9 @@ export default class DocumentsController {
         .preload('organization')
         .firstOrFail()
 
-        const documentIndexes = await DocumentIndex.query().preload('index').where('documentId', document.id)
+        const documentIndexes = await DocumentIndex.query()
+            .preload('index', q => q.orderBy('indexId'))
+            .where('documentId', document.id)
         
         return {
             ...document.serialize(),
@@ -60,7 +62,9 @@ export default class DocumentsController {
     async search({request}) {
         const directoryId = request.input('directoryId')
         const directory = await Directory.findOrFail(directoryId)
-        const indexes = await DirectoryIndex.query().select('id', 'type', 'name', 'displayAs').where('directory_id', directory.id)
+        const indexes = await DirectoryIndex.query()
+            .select('id', 'type', 'name', 'displayAs')
+            .where('directory_id', directory.id)
 
         const documentIndexesRaw = await DocumentIndex.query().where('index_id', 'IN', indexes.map(index => index.id))
 
