@@ -25,9 +25,7 @@ export default class DocumentsController {
         .preload('organization')
         .firstOrFail()
 
-        const documentIndexes = await DocumentIndex.query()
-            .preload('index', q => q.orderBy('indexId'))
-            .where('documentId', document.id)
+        const documentIndexes = await DocumentIndex.query().preload('index').where('documentId', document.id)
         
         return {
             ...document.serialize(),
