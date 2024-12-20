@@ -5,7 +5,7 @@ import Document from "App/Models/Document"
 
 export default class DocumentReportsController {
 
-    async index({request}) {
+    async index({ request }) {
         const directoriesIDs = request.input('directories')
         const directories = await Directory.findMany(Array.isArray(directoriesIDs) ? directoriesIDs : [directoriesIDs])
 
@@ -20,5 +20,5 @@ export default class DocumentReportsController {
 
         return data
     }
-    
+
 }

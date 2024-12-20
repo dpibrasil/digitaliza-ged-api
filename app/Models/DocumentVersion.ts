@@ -30,13 +30,13 @@ export default class DocumentVersion extends compose(AppBaseModel, Observable) {
   @column()
   public documentId: string
 
-  @belongsTo(() => Document, {foreignKey: 'documentId', localKey: 'documentId'})
+  @belongsTo(() => Document, { foreignKey: 'documentId', localKey: 'documentId' })
   public document: BelongsTo<typeof Document>
 
   @column()
   public editorId: number
 
-  @belongsTo(() => User, {foreignKey: 'editorId'})
+  @belongsTo(() => User, { foreignKey: 'editorId' })
   public editor: BelongsTo<typeof User>
 
   @column()
@@ -50,6 +50,9 @@ export default class DocumentVersion extends compose(AppBaseModel, Observable) {
 
   @column()
   public s3Synced: boolean
+
+  @column()
+  declare pages: number
 
   @column.dateTime({ autoCreate: true })
   public createdAt: DateTime

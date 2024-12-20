@@ -15,18 +15,19 @@ import { Readable } from 'stream';
 import DirectoryIndexListValue from "App/Models/DirectoryIndexListValue";
 import createDirectoryIndexesSchema from 'App/Util/directory-validator'
 import createEncryptedFile from 'App/Util/encrypted-file'
+import { countPdfPages } from 'App/Lib/CountPdfPages'
 export default class DocumentsController {
 
-    async show({request}) {
+    async show({ request }) {
         const documentId = request.param('id')
         const document = await Document.query().where('id', documentId)
-        .preload('directory', query => query.preload('indexes'))
-        .preload('editor')
-        .preload('organization')
-        .firstOrFail()
+            .preload('directory', query => query.preload('indexes'))
+            .preload('editor')
+            .preload('organization')
+            .firstOrFail()
 
         const documentIndexes = await DocumentIndex.query().preload('index').where('documentId', document.id)
-        
+
         return {
             ...document.serialize(),
             indexes: await Promise.all(documentIndexes.map(async (index) => {
@@ -44,20 +45,21 @@ export default class DocumentsController {
                     value: val
                 }
             })
-        )}
+            )
+        }
     }
 
-    paginate (arr, size: number) {
+    paginate(arr, size: number) {
         return arr.reduce((acc, val, i) => {
             let idx = Math.floor(i / size)
             let page = acc[idx] || (acc[idx] = [])
             page.push(val)
-        
+
             return acc
         }, [])
     }
 
-    async search({request}) {
+    async search({ request }) {
         const directoryId = request.input('directoryId')
         const directory = await Directory.findOrFail(directoryId)
         const indexes = await DirectoryIndex.query()
@@ -73,11 +75,11 @@ export default class DocumentsController {
             }
         }
 
-        documents = Object.entries(documents).map((entry: any) => ({documentId: entry[0], ...entry[1]}))
+        documents = Object.entries(documents).map((entry: any) => ({ documentId: entry[0], ...entry[1] }))
 
         const userIndexes = request.input('indexes')
         for (const indexId in userIndexes) {
-            var {operator, value} = userIndexes[indexId]
+            var { operator, value } = userIndexes[indexId]
             documents = documents.filter(document => {
                 if (operator == 'interval') {
                     const index = indexes.find(i => i.id == Number(indexId))
@@ -95,20 +97,20 @@ export default class DocumentsController {
         // if no index query, select all documents
         if (!userIndexes || !Object.values(userIndexes).length) {
             documents = await Promise.all((await Document.query().select('id').where('directoryId', directory
-            .id)
-            .preload('indexes', index => index.orderBy('indexId')))
-            .map(async (document) => {
-                const d = {documentId: document.id}
-                const d2 = Object.fromEntries(await Promise.all(document.indexes.map(async (index) => {
-                    const directoryIndex: any = indexes.find(i => i.id === index.indexId)
-                    if (directoryIndex.type == 'list') {
-                        const value = await DirectoryIndexListValue.findOrFail(index[directoryIndex.type])
-                        return [index.indexId, value]
-                    }
-                    return [index.indexId, index[directoryIndex.type]]
-                })))
-                return {...d, ...d2}
-            }))
+                .id)
+                .preload('indexes', index => index.orderBy('indexId')))
+                .map(async (document) => {
+                    const d = { documentId: document.id }
+                    const d2 = Object.fromEntries(await Promise.all(document.indexes.map(async (index) => {
+                        const directoryIndex: any = indexes.find(i => i.id === index.indexId)
+                        if (directoryIndex.type == 'list') {
+                            const value = await DirectoryIndexListValue.findOrFail(index[directoryIndex.type])
+                            return [index.indexId, value]
+                        }
+                        return [index.indexId, index[directoryIndex.type]]
+                    })))
+                    return { ...d, ...d2 }
+                }))
         }
 
 
@@ -127,29 +129,29 @@ export default class DocumentsController {
         }
     }
 
-    async duplicate({request, auth}) {
+    async duplicate({ request, auth }) {
         const documentId = request.param('id')
         const document = await Document.findOrFail(documentId)
-        const duplicate = await Document.create({...document.toJSON(), id: undefined, editorId: auth.user.id, createdAt: undefined, updatedAt: undefined})
+        const duplicate = await Document.create({ ...document.toJSON(), id: undefined, editorId: auth.user.id, createdAt: undefined, updatedAt: undefined })
 
         const documentIndexes = await DocumentIndex.query().preload('index').where('documentId', document.id)
 
         for (const indexKey in documentIndexes) {
             const index = documentIndexes[indexKey]
-            documentIndexes[indexKey] = await DocumentIndex.create({...index.toJSON(), documentId: duplicate.id, id: undefined})
+            documentIndexes[indexKey] = await DocumentIndex.create({ ...index.toJSON(), documentId: duplicate.id, id: undefined })
         }
 
         return duplicate
     }
 
-    async store({request, auth, logger, response}: HttpContextContract) {
+    async store({ request, auth, logger, response }: HttpContextContract) {
         await request.validate(CreateDocumentValidator)
         // verify if document already exists
-        
+
         if (await Document.query().where('documentId', request.input('documentId')).first()) {
-            return response.status(409).send({message: 'O arquivo já foi enviado.'})
+            return response.status(409).send({ message: 'O arquivo já foi enviado.' })
         }
-        
+
         const directoryId = request.input('directoryId')
         const directory = await Directory.findOrFail(directoryId)
         await directory.load('indexes')
@@ -167,17 +169,20 @@ export default class DocumentsController {
         data.editorId = auth.user?.id
         data.version = 1
         data.secretKey = Env.get('DOCUMENTS_KEY')
-    
+
         // create path
         const now = new Date()
-        const documentPath = `${now.getFullYear()}/${data.organizationId}/${('00' + Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (60*60*24*1000))).slice(-3)}/${data.documentId}`
+        const documentPath = `${now.getFullYear()}/${data.organizationId}/${('00' + Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (60 * 60 * 24 * 1000))).slice(-3)}/${data.documentId}`
         fs.mkdirSync(`${storage.path}/${documentPath}`, { recursive: true })
 
         // define file path
         const file = request.file('file')
         if (!file) {
-            return response.badRequest({message: 'Você deve enviar um arquivo.'})
+            return response.badRequest({ message: 'Você deve enviar um arquivo.' })
         }
+
+        var pages = 1
+        pages = await countPdfPages(file.tmpPath as string)
 
         // encrypt and save file
         await createEncryptedFile(
@@ -193,25 +198,26 @@ export default class DocumentsController {
             storageId: storage.id,
             editorId: auth.user?.id,
             path: documentPath,
-            s3Synced: false
+            s3Synced: false,
+            pages
         })
 
         // create document
         const document = await Document.create(data)
-        
+
         // save indexes
         for (const indexKey in documentIndexesValues) {
             const indexId = parseInt(indexKey.slice(6))
             const indexValue = documentIndexesValues[indexKey]
             const index = directory.indexes.find(x => x.id == indexId)
-            
+
             if (index) {
-                await DocumentIndex.create({documentId: document.id, indexId, [index.type]: indexValue})
+                await DocumentIndex.create({ documentId: document.id, indexId, [index.type]: indexValue })
             }
         }
 
         logger.info(`User ${auth.user?.id} created document ${document.id}`)
-        
+
         return document.serialize()
     }
 
@@ -228,7 +234,7 @@ export default class DocumentsController {
         logger.info(`User ${auth.user.id} download GED Project from document ${document.id}.`)
     }
 
-    async download({request, response, auth, logger}) {
+    async download({ request, response, auth, logger }) {
         const documentId = request.param('id')
         const document = await Document.findOrFail(documentId)
 
@@ -241,8 +247,7 @@ export default class DocumentsController {
         logger.info(`User ${auth.user.id} download document ${document.id}. DownloadID: ${download.download.id}`)
     }
 
-    async exportList({request, auth, response})
-    {
+    async exportList({ request, auth, response }) {
         const indexesIDs = request.input('indexes')
         const indexes = await DirectoryIndex.findMany(indexesIDs)
         const documentsIDs = request.input('documents')
