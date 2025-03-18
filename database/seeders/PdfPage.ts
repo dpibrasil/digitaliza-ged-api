@@ -10,6 +10,8 @@ export default class extends BaseSeeder {
       .preload('document')
       .preload('storage')
       .where('pages', 1)
+    console.log(documentVersions.length)
+    return
     for (const document of documentVersions) {
       try {
         const encryptedFilePath = await document.getLocalPath()
