@@ -57,6 +57,7 @@ ${data.map(d => `${d.name}: ${d.documentsCount.toLocaleString('pt-BR')} document
             page: 'PAGE 01'
         })
 
+        response.header('content-type', 'application/pdf')
         return response.send(pdf);
     }
 
