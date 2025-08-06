@@ -44,11 +44,11 @@ Relatório gerado em: ${new Date().toLocaleString('pt-BR')}
 Usuário: ${auth.user?.name}
 
 Diretórios: ${directories.map(d => d.name).join(', ')}
-Quantidade de documentos: ${totalDocuments}
-Quantidade de páginas: ${totalPages}
+Quantidade de documentos: ${totalDocuments.toLocaleString('pt-BR')}
+Quantidade de páginas: ${totalPages.toLocaleString('pt-BR')}
 
 Relatório por diretório:
-${data.map(d => `${d.name}: ${d.documentsCount.toLocaleString('pt-BR')} documentos e ${d.documentsCount.toLocaleString('pt-BR')} páginas`).join('\n')}`
+${data.map(d => `${d.name}: ${d.documentsCount.toLocaleString('pt-BR')} documentos e ${d.documentPagesCount.toLocaleString('pt-BR')} páginas`).join('\n')}`
 
         const pdf = await fillPDFReport({
             companyName: organization.name,
