@@ -142,4 +142,15 @@ export default class BackupsController {
         await backup.delete()
     }
 
+    async getDocumentsBackupsHealth()
+    {
+        const documents = await DocumentVersion.query()
+            .count('* as total')
+            .where('s3_synced', false)
+        
+        return {
+            unsyncedDocuments: documents[0].$extras.total
+        }
+    }
+
 }

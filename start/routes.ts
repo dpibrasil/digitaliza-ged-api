@@ -5,6 +5,7 @@ Route.get('/test-connection', () => ({message: 'OK'}))
 Route.resource('/backups', 'BackupsController').only(['store', 'index', 'destroy'])
 Route.get('/backups/organization/:organizationId', 'BackupsController.showByOrganization')
 Route.get('/backups/:id', 'BackupsController.downloadBackup')
+Route.get('/backups-health/documents', 'BackupsController.getDocumentsBackupsHealth')
 
 Route.group(() => {
     Route.resource('/organizations', 'OrganizationsController')
