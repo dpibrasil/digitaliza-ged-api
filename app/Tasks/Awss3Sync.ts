@@ -15,7 +15,9 @@ export default class Awss3Sync extends BaseTask {
 
 	public async handle() {
 		const versions = await DocumentVersion.query().where('s3_synced', false)
-		await Promise.all(versions.map(version => version.awsSync()))
-		await Promise.all(versions.map(version => version.save()))
+		for (const version of versions) {
+			await version.awsSync()
+			await version.save()
+		}
   	}
 }
