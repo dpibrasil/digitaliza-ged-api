@@ -23,7 +23,7 @@ export default class DocumentReportsController {
             const documents = await Document.query().count('*').where('directoryId', directory.id)
             const documentPages = await DocumentVersion.query()
                 .sum('pages', 'sumPages')
-                .whereRaw(`created_at >= '${startDate}' AND created_at <= '${endDate}' AND document_id IN (SELECT document_id FROM documents WHERE directory_id = ${directory.id})`)
+                .whereRaw(`created_at >= '${startDate.toISOString()}' AND created_at <= '${endDate.toISOString()}' AND document_id IN (SELECT document_id FROM documents WHERE directory_id = ${directory.id})`)
                 .first()
             totalDocuments += Number(documents[0].$extras.count)
             totalPages += Number(documentPages?.$extras.sumPages)
