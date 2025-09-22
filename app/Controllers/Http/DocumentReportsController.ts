@@ -20,7 +20,9 @@ export default class DocumentReportsController {
         let totalPages = 0
 
         const data = await Promise.all(directories.map(async (directory) => {
-            const documents = await Document.query().count('*').where('directoryId', directory.id)
+            const documents = await Document.query().count('*')
+                .where('directoryId', directory.id)
+                .whereRaw(`created_at >= '${startDate.toISOString()}' AND created_at <= '${endDate.toISOString()}'`)
             const documentPages = await DocumentVersion.query()
                 .sum('pages', 'sumPages')
                 .whereRaw(`created_at >= '${startDate.toISOString()}' AND created_at <= '${endDate.toISOString()}' AND document_id IN (SELECT document_id FROM documents WHERE directory_id = ${directory.id})`)
