@@ -113,6 +113,24 @@ export default class DocumentsController {
                 }))
         }
 
+        if (documents.length > 0) {
+            const documentIds = documents.map((d: any) => Number(d.documentId))
+            const docRecords = await Document.query().select('id', 'documentId', 'version').whereIn('id', documentIds)
+            const docStringIds = docRecords.map(doc => doc.documentId)
+            const documentVersionPages = await DocumentVersion.query()
+                .select('documentId', 'pages', 'version')
+                .whereIn('documentId', docStringIds)
+
+            const pagesMap = new Map<number, number>()
+            for (const doc of docRecords) {
+                const versionRecord = documentVersionPages.find(v => v.documentId === doc.documentId && v.version === doc.version)
+                pagesMap.set(doc.id, versionRecord?.pages ?? 1)
+            }
+
+            documents = documents.map((d: any) => ({ ...d, pages: pagesMap.get(Number(d.documentId)) ?? 1 }))
+        }
+
+        const totalPages = documents.reduce((sum: number, d: any) => sum + (d.pages ?? 0), 0)
 
         var page = request.input('page')
         page = page ? page - 1 : 0
@@ -124,6 +142,7 @@ export default class DocumentsController {
             currentPage: page + 1,
             lastPage: pagination.length,
             total: documents.length,
+            totalPages,
             results: pagination[page] ?? [],
             indexes
         }
