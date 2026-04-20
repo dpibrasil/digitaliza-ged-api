@@ -49,101 +49,147 @@ export default class DocumentsController {
         }
     }
 
-    paginate(arr, size: number) {
-        return arr.reduce((acc, val, i) => {
-            let idx = Math.floor(i / size)
-            let page = acc[idx] || (acc[idx] = [])
-            page.push(val)
-
-            return acc
-        }, [])
-    }
-
     async search({ request }) {
         const directoryId = request.input('directoryId')
+        const page = Number(request.input('page') ?? 1)
+        const perPage = Number(request.input('pageLimit') ?? 25)
+
         const directory = await Directory.findOrFail(directoryId)
         const indexes = await DirectoryIndex.query()
             .select('id', 'type', 'name', 'displayAs')
             .where('directory_id', directory.id)
 
-        const documentIndexesRaw = await DocumentIndex.query().where('index_id', 'IN', indexes.map(index => index.id))
-
-        var documents: any = Object.fromEntries(documentIndexesRaw.map(i => [i.documentId, {}]))
-        for (const index of indexes) {
-            for (const documentIndex of documentIndexesRaw.filter(x => x.indexId == index.id)) {
-                documents[documentIndex.documentId][index.id] = index.type == 'list' ? (await DirectoryIndexListValue.findOrFail(documentIndex[index.type])).serialize() : documentIndex[index.type]
-            }
-        }
-
-        documents = Object.entries(documents).map((entry: any) => ({ documentId: entry[0], ...entry[1] }))
-
         const userIndexes = request.input('indexes')
-        for (const indexId in userIndexes) {
-            var { operator, value } = userIndexes[indexId]
-            documents = documents.filter(document => {
-                if (operator == 'interval') {
-                    const index = indexes.find(i => i.id == Number(indexId))
-                    if (index?.type == 'datetime') {
-                        value = value.map(v => new Date(v).getTime())
-                        document[indexId] = new Date(document[indexId]).getTime()
+        const hasFilters = userIndexes && Object.values(userIndexes).length > 0
+
+        let documents: any[]
+        let total: number
+        let totalPages: number
+        let results: any[]
+
+        if (hasFilters) {
+            const documentIndexesRaw = await DocumentIndex.query().where('index_id', 'IN', indexes.map(index => index.id))
+
+            // Group by indexId for O(n) lookup instead of O(n²) nested filter
+            const byIndexId = new Map<number, any[]>()
+            for (const di of documentIndexesRaw) {
+                if (!byIndexId.has(di.indexId)) byIndexId.set(di.indexId, [])
+                byIndexId.get(di.indexId)!.push(di)
+            }
+
+            const docsMap: any = Object.fromEntries(documentIndexesRaw.map(i => [i.documentId, {}]))
+            for (const index of indexes) {
+                for (const documentIndex of byIndexId.get(index.id) ?? []) {
+                    docsMap[documentIndex.documentId][index.id] = index.type == 'list'
+                        ? (await DirectoryIndexListValue.findOrFail(documentIndex[index.type])).serialize()
+                        : documentIndex[index.type]
+                }
+            }
+
+            documents = Object.entries(docsMap).map((entry: any) => ({ documentId: entry[0], ...entry[1] }))
+
+            for (const indexId in userIndexes) {
+                var { operator, value } = userIndexes[indexId]
+                documents = documents.filter(document => {
+                    if (operator == 'interval') {
+                        const index = indexes.find(i => i.id == Number(indexId))
+                        if (index?.type == 'datetime') {
+                            value = value.map(v => new Date(v).getTime())
+                            document[indexId] = new Date(document[indexId]).getTime()
+                        }
+                        return document[indexId] >= value[0] && document[indexId] <= value[1]
                     }
-                    return document[indexId] >= value[0] && document[indexId] <= value[1]
+                    return eval(`(typeof document[indexId] == 'object' ? document[indexId].id : document[indexId]) ${operator} value`)
+                })
+            }
+
+            total = documents.length
+
+            if (documents.length > 0) {
+                const documentIds = documents.map((d: any) => Number(d.documentId))
+                const docRecords = await Document.query().select('id', 'documentId', 'version').whereIn('id', documentIds)
+                const docStringIds = docRecords.map(doc => doc.documentId)
+                const documentVersionPages = await DocumentVersion.query()
+                    .select('documentId', 'pages', 'version')
+                    .whereIn('documentId', docStringIds)
+
+                const pagesMap = new Map<number, number>()
+                for (const doc of docRecords) {
+                    const versionRecord = documentVersionPages.find(v => v.documentId === doc.documentId && v.version === doc.version)
+                    pagesMap.set(doc.id, versionRecord?.pages ?? 1)
                 }
 
-                return eval(`(typeof document[indexId] == 'object' ? document[indexId].id : document[indexId]) ${operator} value`)
-            })
-        }
-
-        // if no index query, select all documents
-        if (!userIndexes || !Object.values(userIndexes).length) {
-            documents = await Promise.all((await Document.query().select('id').where('directoryId', directory
-                .id)
-                .preload('indexes', index => index.orderBy('indexId')))
-                .map(async (document) => {
-                    const d = { documentId: document.id }
-                    const d2 = Object.fromEntries(await Promise.all(document.indexes.map(async (index) => {
-                        const directoryIndex: any = indexes.find(i => i.id === index.indexId)
-                        if (directoryIndex.type == 'list') {
-                            const value = await DirectoryIndexListValue.findOrFail(index[directoryIndex.type])
-                            return [index.indexId, value]
-                        }
-                        return [index.indexId, index[directoryIndex.type]]
-                    })))
-                    return { ...d, ...d2 }
-                }))
-        }
-
-        if (documents.length > 0) {
-            const documentIds = documents.map((d: any) => Number(d.documentId))
-            const docRecords = await Document.query().select('id', 'documentId', 'version').whereIn('id', documentIds)
-            const docStringIds = docRecords.map(doc => doc.documentId)
-            const documentVersionPages = await DocumentVersion.query()
-                .select('documentId', 'pages', 'version')
-                .whereIn('documentId', docStringIds)
-
-            const pagesMap = new Map<number, number>()
-            for (const doc of docRecords) {
-                const versionRecord = documentVersionPages.find(v => v.documentId === doc.documentId && v.version === doc.version)
-                pagesMap.set(doc.id, versionRecord?.pages ?? 1)
+                documents = documents.map((d: any) => ({ ...d, pages: pagesMap.get(Number(d.documentId)) ?? 1 }))
             }
 
-            documents = documents.map((d: any) => ({ ...d, pages: pagesMap.get(Number(d.documentId)) ?? 1 }))
+            totalPages = documents.reduce((sum: number, d: any) => sum + (d.pages ?? 0), 0)
+            results = documents.slice((page - 1) * perPage, page * perPage)
+        } else {
+            // No filters: use DB-level pagination instead of loading all documents
+            const allDocs = await Document.query()
+                .select('documentId', 'version')
+                .where('directoryId', directory.id)
+
+            total = allDocs.length
+
+            if (total > 0) {
+                const docStringIds = allDocs.map(d => d.documentId)
+                const allVersions = await DocumentVersion.query()
+                    .select('documentId', 'pages', 'version')
+                    .whereIn('documentId', docStringIds)
+
+                const versionMap = new Map(allVersions.map(v => [`${v.documentId}:${v.version}`, v.pages]))
+                totalPages = allDocs.reduce((sum, doc) => sum + (versionMap.get(`${doc.documentId}:${doc.version}`) ?? 1), 0)
+            } else {
+                totalPages = 0
+            }
+
+            const pagedDocs = await Document.query()
+                .select('id')
+                .where('directoryId', directory.id)
+                .preload('indexes', q => q.orderBy('indexId'))
+                .limit(perPage)
+                .offset((page - 1) * perPage)
+
+            const pagedEnriched = await Promise.all(pagedDocs.map(async (document) => {
+                const d2 = Object.fromEntries(await Promise.all(document.indexes.map(async (index) => {
+                    const directoryIndex: any = indexes.find(i => i.id === index.indexId)
+                    if (directoryIndex.type == 'list') {
+                        const value = await DirectoryIndexListValue.findOrFail(index[directoryIndex.type])
+                        return [index.indexId, value]
+                    }
+                    return [index.indexId, index[directoryIndex.type]]
+                })))
+                return { documentId: document.id, ...d2 }
+            }))
+
+            if (pagedEnriched.length > 0) {
+                const documentIds = pagedEnriched.map((d: any) => Number(d.documentId))
+                const docRecords = await Document.query().select('id', 'documentId', 'version').whereIn('id', documentIds)
+                const docStringIds = docRecords.map(doc => doc.documentId)
+                const documentVersionPages = await DocumentVersion.query()
+                    .select('documentId', 'pages', 'version')
+                    .whereIn('documentId', docStringIds)
+
+                const pagesMap = new Map<number, number>()
+                for (const doc of docRecords) {
+                    const versionRecord = documentVersionPages.find(v => v.documentId === doc.documentId && v.version === doc.version)
+                    pagesMap.set(doc.id, versionRecord?.pages ?? 1)
+                }
+
+                results = pagedEnriched.map((d: any) => ({ ...d, pages: pagesMap.get(Number(d.documentId)) ?? 1 }))
+            } else {
+                results = []
+            }
         }
-
-        const totalPages = documents.reduce((sum: number, d: any) => sum + (d.pages ?? 0), 0)
-
-        var page = request.input('page')
-        page = page ? page - 1 : 0
-        const perPage = request.input('pageLimit') ?? 25
-        const pagination = this.paginate(documents, perPage)
 
         return {
             perPage,
-            currentPage: page + 1,
-            lastPage: pagination.length,
-            total: documents.length,
+            currentPage: page,
+            lastPage: Math.ceil(total / perPage),
+            total,
             totalPages,
-            results: pagination[page] ?? [],
+            results,
             indexes
         }
     }
