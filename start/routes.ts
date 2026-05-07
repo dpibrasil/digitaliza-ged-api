@@ -24,6 +24,7 @@ Route.group(() => {
     Route.post('/pdfs', 'PdfsController.init')
     Route.post('/pdfs/:id/image', 'PdfsController.uploadImage')
     Route.get('/pdfs/:id/export', 'PdfsController.export')
+    Route.get('/organizations/:id/report', 'DocumentReportsController.index')
 
     Route.group(() => {
         Route.resource('/users', 'UsersController')
@@ -31,7 +32,6 @@ Route.group(() => {
         Route.resource('/users/:userId/organizations', 'UserOrganizationsController')
         Route.resource('/users/:userId/directories', 'UserDirectoriesController')
         Route.resource('/mantainers', 'MantainersController')
-        Route.get('/organizations/:id/report', 'DocumentReportsController.index')
         Route.get('/path', 'PathsController.index')
         Route.get('/documents/:id/project', 'DocumentsController.downloadProject')
     }).middleware('isAdmin')
