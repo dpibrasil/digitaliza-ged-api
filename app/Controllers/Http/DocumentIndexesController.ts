@@ -1,10 +1,10 @@
 import type { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
-import { schema, rules } from '@ioc:Adonis/Core/Validator'
+import { schema } from '@ioc:Adonis/Core/Validator'
 import Directory from 'App/Models/Directory'
 import DirectoryIndexListValue from 'App/Models/DirectoryIndexListValue'
 import Document from 'App/Models/Document'
 import DocumentIndex from 'App/Models/DocumentIndex'
-import createDirectoryIndexesSchema from 'App/Util/directory-validator'
+import createDirectoryIndexesSchema, { createIndexRules } from 'App/Util/directory-validator'
 
 export default class DocumentIndexesController {
 
@@ -36,12 +36,7 @@ export default class DocumentIndexesController {
             const args: any = []
 
             if (schemaType == 'string') args.push({})
-            args.push([])
-            if (index.minLength) args[args.length - 1].push(rules.minLength(index.minLength))
-            if (index.maxLength) args[args.length - 1].push(rules.maxLength(index.maxLength))
-            if (index.min || index.max) args[args.length - 1].push(rules.range(index.min, index.max))
-            if (index.regex) args[args.length - 1].push(rules.regex(new RegExp(index.regex)))
-            if (index.type == 'list') args[args.length - 1].push(rules.exists({table: 'directory_index_list_values', column: 'id'}))
+            args.push(createIndexRules(index))
 
             return ['index-' + index.id, schema[schemaType].optional(...args)]
         })))
